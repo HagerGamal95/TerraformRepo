@@ -5,43 +5,21 @@ pipeline {
         AWS_DEFAULT_REGION = "eu-west-1"
     }
 
-    parameters {
-        booleanParam(name: 'APPLY_CHANGES', defaultValue: false, description: 'Apply Terraform changes?')
-    }
-
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/HagerGamal95/TerraformRepo.git'
+                git branch: 'main', url: 'https://github.com/maatoot/terraform-nginx.git'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'aws-creds',
-                        usernameVariable: 'CREDS_USR',
-                        passwordVariable: 'CREDS_PSW'
-                    )
-                ]) {
-                    sh '''
-                        export AWS_ACCESS_KEY_ID=$CREDS_USR
-                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
-                        terraform init
-                    '''
-                }
+                sh 'terraform init'
             }
         }
 
-        stage('Terraform Validate') {
-            steps {
-                sh 'terraform validate'
-            }
-        }
-
-        stage('Terraform Plan') {
+        stage('Terraform Destroy All') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -51,18 +29,15 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        export AWS_ACCESS_KEY_ID=$CREDS_USR
-                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
-                        terraform plan -out=tfplan
+                    export AWS_ACCESS_KEY_ID=$CREDS_USR
+                    export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
+                    terraform destroy -auto-approve || true
                     '''
                 }
             }
         }
 
         stage('Terraform Apply') {
-            when {
-                expression { return params.APPLY_CHANGES == true }
-            }
             steps {
                 withCredentials([
                     usernamePassword(
@@ -72,21 +47,27 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        export AWS_ACCESS_KEY_ID=$CREDS_USR
-                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
-                        terraform apply -auto-approve tfplan
+                    export AWS_ACCESS_KEY_ID=$CREDS_USR
+                    export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
+                    terraform apply -auto-approve
                     '''
                 }
             }
         }
-    }
 
-    post {
-        success {
-            echo "Terraform pipeline completed successfully!"
-        }
-        failure {
-            echo "Pipeline failed. Check logs."
+        stage('Wait for Nginx') {
+            steps {
+                script {
+                    def ip = sh(script: "terraform output -raw instance_public_ip", returnStdout: true).trim()
+                    sh """
+                    echo 'Waiting for Nginx on ${ip}...'
+                    until curl -s http://${ip} >/dev/null 2>&1; do
+                      sleep 10
+                    done
+                    echo 'Nginx is up and running on ${ip}!'
+                    """
+                }
+            }
         }
     }
 }
