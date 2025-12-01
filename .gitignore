@@ -23,3 +23,12 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# Keys
+*.pem
+*.key
+*.pub
+*.zip
+
+# Local
+*.log
+*.tmp
