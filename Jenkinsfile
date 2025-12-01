@@ -17,18 +17,42 @@ pipeline {
             }
         }
 
-        stage('Terraform Init / Validate / Plan') {
+        stage('Terraform Init') {
             steps {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'aws-creds',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                        usernameVariable: 'CREDS_USR',
+                        passwordVariable: 'CREDS_PSW'
                     )
                 ]) {
                     sh '''
+                        export AWS_ACCESS_KEY_ID=$CREDS_USR
+                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
                         terraform init
-                        terraform validate
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Validate') {
+            steps {
+                sh 'terraform validate'
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds',
+                        usernameVariable: 'CREDS_USR',
+                        passwordVariable: 'CREDS_PSW'
+                    )
+                ]) {
+                    sh '''
+                        export AWS_ACCESS_KEY_ID=$CREDS_USR
+                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
                         terraform plan -out=tfplan
                     '''
                 }
@@ -43,11 +67,13 @@ pipeline {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'aws-creds',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                        usernameVariable: 'CREDS_USR',
+                        passwordVariable: 'CREDS_PSW'
                     )
                 ]) {
                     sh '''
+                        export AWS_ACCESS_KEY_ID=$CREDS_USR
+                        export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
                         terraform apply -auto-approve tfplan
                     '''
                 }
@@ -64,4 +90,3 @@ pipeline {
         }
     }
 }
-
