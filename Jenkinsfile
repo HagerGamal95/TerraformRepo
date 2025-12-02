@@ -19,23 +19,6 @@ pipeline {
             }
         }
 
-        stage('Terraform Destroy All') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'aws-creds',
-                        usernameVariable: 'CREDS_USR',
-                        passwordVariable: 'CREDS_PSW'
-                    )
-                ]) {
-                    sh '''
-                    export AWS_ACCESS_KEY_ID=$CREDS_USR
-                    export AWS_SECRET_ACCESS_KEY=$CREDS_PSW
-                    terraform destroy -auto-approve || true
-                    '''
-                }
-            }
-        }
 
         stage('Terraform Apply') {
             steps {
