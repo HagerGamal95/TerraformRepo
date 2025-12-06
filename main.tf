@@ -96,3 +96,101 @@ output "instance_private_ip" {
   value = aws_instance.web.private_ip
 }
 
+# ------------------------------
+# EKS: Cluster + Node Group
+# ------------------------------
+
+# IAM role for EKS cluster
+resource "aws_iam_role" "eks_cluster" {
+  name = "jenkins-demo-eks-cluster-role"
+
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "eks.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+# EKS cluster in default VPC public subnets
+resource "aws_eks_cluster" "this" {
+  name     = "jenkins-demo-eks"
+  role_arn = aws_iam_role.eks_cluster.arn
+  # optional: version = "1.29"  # or leave to get latest supported
+
+  vpc_config {
+    subnet_ids = data.aws_subnets.default.ids  # default VPC public subnets
+    endpoint_public_access = true
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy
+  ]
+}
+
+# IAM role for worker nodes (managed node group)
+resource "aws_iam_role" "eks_nodegroup" {
+  name = "jenkins-demo-eks-nodegroup-role"
+
+  assume_role_policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker_AmazonEKSWorkerNodePolicy" {
+  role       = aws_iam_role.eks_nodegroup.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker_AmazonEC2ContainerRegistryReadOnly" {
+  role       = aws_iam_role.eks_nodegroup.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker_AmazonEKS_CNI_Policy" {
+  role       = aws_iam_role.eks_nodegroup.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+resource "aws_eks_node_group" "this" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "jenkins-demo-eks-ng"
+  node_role_arn   = aws_iam_role.eks_nodegroup.arn
+
+  # Put worker nodes in the same (public) subnets
+  subnet_ids = data.aws_subnets.default.ids
+
+  scaling_config {
+    desired_size = 1
+    max_size     = 1
+    min_size     = 1
+  }
+
+  instance_types = ["t3.small"]  # small & cheap for labs
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_worker_AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.eks_worker_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.eks_worker_AmazonEKS_CNI_Policy
+  ]
+}
+
+output "eks_cluster_name" {
+  value = aws_eks_cluster.this.name
+}
+
+output "eks_nodegroup_name" {
+  value = aws_eks_node_group.this.node_group_name
+}
