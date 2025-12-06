@@ -7,6 +7,14 @@ terraform {
       version = "~> 5.0"
     }
   }
+    backend "s3" {
+     bucket         = "hager-tf-state-222735209716-us-east-1"
+     key            = "eks/terraform.tfstate"
+     region         = "us-east-1"
+     dynamodb_table = "hager-terraform-locks"
+     encrypt        = true
+   }
+
 }
 
 provider "aws" {
