@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    options {
+        // Don’t try to resume Terraform steps after Jenkins restarts
+        disableResume()
+    }
+
     environment {
         AWS_DEFAULT_REGION = "eu-west-1"
     }
@@ -18,7 +23,7 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds'
                 ]]) {
-                    sh 'terraform init'
+                    sh 'terraform init -input=false'
                 }
             }
         }
@@ -29,13 +34,14 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds'
                 ]]) {
-                    sh 'terraform apply -auto-approve'
+                    sh 'terraform apply -auto-approve -input=false'
                 }
             }
         }
 
         stage('Wait for Nginx') {
             steps {
+                // creds not strictly required here, بس خاليها موحدة
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds'
@@ -51,7 +57,7 @@ pipeline {
                             until curl -s http://${ip} >/dev/null 2>&1; do
                               sleep 10
                             done
-                            echo 'Nginx is up and running on ${ip}!'
+                            echo 'Nginx is up and running by hager Gamal on ${ip}!'
                         """
                     }
                 }
