@@ -7,7 +7,8 @@ pipeline {
     }
 
     environment {
-        AWS_DEFAULT_REGION = "eu-west-1"
+        // نفس الريجون اللي في provider "aws" في main.tf
+        AWS_DEFAULT_REGION = "us-east-1"
     }
 
     stages {
@@ -28,6 +29,18 @@ pipeline {
             }
         }
 
+        // اختيارية لو حابب تشوف الـ changes قبل الـ apply
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh 'terraform plan -input=false'
+                }
+            }
+        }
+
         stage('Terraform Apply') {
             steps {
                 withCredentials([[
@@ -35,31 +48,6 @@ pipeline {
                     credentialsId: 'aws-creds'
                 ]]) {
                     sh 'terraform apply -auto-approve -input=false'
-                }
-            }
-        }
-
-        stage('Wait for Nginx') {
-            steps {
-                // creds not strictly required here, بس خاليها موحدة
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-                    script {
-                        def ip = sh(
-                            script: "terraform output -raw instance_public_ip",
-                            returnStdout: true
-                        ).trim()
-
-                        sh """
-                            echo 'Waiting for Nginx on ${ip}...'
-                            until curl -s http://${ip} >/dev/null 2>&1; do
-                              sleep 10
-                            done
-                            echo 'Nginx is up and running by hager Gamal on ${ip}!'
-                        """
-                    }
                 }
             }
         }
